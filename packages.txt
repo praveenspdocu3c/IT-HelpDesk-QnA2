@@ -1,1 +1,2 @@
-sqlite3
+import os
+os.system("apt-get update && apt-get install -y sqlite3")
