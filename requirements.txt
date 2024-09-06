@@ -1,12 +1,7 @@
 streamlit
 langchain
-langchain_community
-langchain_text_splitters
-langchain_openai
-langchain_chroma
-langchain_core
-chromadb>=0.3.25
-protobuf==3.20.0
-opentelemetry-api==1.7.0
-opentelemetry-sdk==1.7.0
-opentelemetry-exporter-otlp==1.7.0
+langchain-community
+langchain-text-splitters
+langchain-openai
+langchain-chroma
+PyMuPDF
