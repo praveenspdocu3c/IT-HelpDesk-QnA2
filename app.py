@@ -1,3 +1,7 @@
+import sys
+import pysqlite3
+sys.modules["sqlite3"] = pysqlite3
+
 import streamlit as st
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
