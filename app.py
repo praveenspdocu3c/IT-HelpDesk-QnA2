@@ -1,6 +1,6 @@
-import sys
-import pysqlite3
-sys.modules["sqlite3"] = pysqlite3
+# import sys
+# import pysqlite3
+# sys.modules["sqlite3"] = pysqlite3
 
 import json
 import streamlit as st
@@ -170,7 +170,7 @@ if excel_files:
             print("-----------------------------------------------------------------------------------------------------------------------------------------")
                         
             # Prepare LLM model for response generation
-            st.write("Multiple query founded")
+            st.write("Multiple queries founded")
             llm = AzureChatOpenAI(
                 api_version=api_version,
                 azure_endpoint=azure_endpoint,
