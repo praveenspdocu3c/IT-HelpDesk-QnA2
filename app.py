@@ -2,6 +2,7 @@ import sys
 import pysqlite3
 sys.modules["sqlite3"] = pysqlite3
 
+import json
 import streamlit as st
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -100,46 +101,156 @@ if excel_files:
     )
 
     # User input for problem statement
-    user_problem = st.text_input("Enter the problem statement for resolution:", "")
+    question = st.text_input("Enter the problem statement for resolution:", "")
+    
+    from openai import AzureOpenAI
+    client = AzureOpenAI(  
+                azure_endpoint="https://danielingitaraj.openai.azure.com/",  
+                api_key="a5c4e09a50dd4e13a69e7ef19d07b48c",  
+                api_version="2024-02-01",
+            )  
 
-    if st.button("Get Resolution"):
-        query = f"""What is the Resolution for the exact below mentioned Problem:\n {user_problem}\n\n 
-                    Try to extract the resolution until any of this title arrives "NOTES" , "Short description:"\n
-                    Note: Extract the exact answer from the input context and the answer of the problem will be part of the Resolution that can be found in Article body"""
+    def splitllm(text):
+        results = []
+        messages = [
+                {
+                    "role": "system",
+                    "content": """Split the given question into multiple questions.
+                                Output should be in JSON format. Example:
+                                [{
+                                    "s_no1": "My existing workspace is not appearing in Work10?",
+                                    "s_no2": "My new workspace is not appearing in Work10?"
+                                }]"""
+                },
+                {
+                    "role": "user", "content": "Question needed to be converted into multiple questions:\n My existing and another new workspace is not appearing in Work10?"
+                },
+                {
+                    "role": "assistant", "content":"""  [{ 
+                                                          "s_no1":  "My existing workspace is not appearing in Work10?" ,
+                                                          "s_no2":  "My new workspace is not appearing in Work10?"}]
+                    """
+                },
+                {
+                    "role": "user", "content": f"Question needed to be converted into multiple questions:\n{text}"
+                }
+            ]
+
+        response = client.chat.completions.create(  
+                model="GPT4",  
+                messages=messages,  
+                temperature=0,    
+            )  
+        results.append(response.choices[0].message.content)
+        return results
+
+    if st.button("Get Resolution"):    
+        if (("and" or "or" or "And" or "Or" or "," or ";") in question ):
+            
+            sps = []
+            sps = splitllm(question)
+            
+            # Store results in the desired format
+            Index = []
+            for result in sps:
+                try:
+                    json_result = json.loads(result) 
+                    for item in json_result:
+                        Index.append({
+                            "1": item["s_no1"],
+                            "2": item["s_no2"],
+                        })
+                except json.JSONDecodeError as e:
+                    st.write(f"Error decoding JSON: {result}\nError: {e}")
+                except KeyError as e:
+                    st.write(f"Missing key in result: {result}\nError: {e}")
+                        
+            for item in Index:
+                    print(f"{item['1']}, {item['2']}")
+            print("-----------------------------------------------------------------------------------------------------------------------------------------")
+                        
+            # Prepare LLM model for response generation
+            st.write("Multiple query founded")
+            llm = AzureChatOpenAI(
+                api_version=api_version,
+                azure_endpoint=azure_endpoint,
+                openai_api_key=api_key,
+                model="gpt-4o-mini",
+                base_url=None,
+                azure_deployment="GPT-4o-mini"
+            )
+
+            llm.validate_base_url = False
+            
+            for item in Index:
+                query = f"""What is the Resolution for the exact below mentioned Problem:\n {item}\n\n 
+                            Try to extract the resolution until any of this title arrives "NOTES" , "Short description:"\n
+                            Note: Extract the exact answer from the input context and the answer of the problem will be part of the Resolution that can be found in Article body"""
+                
+                docs = retriever.invoke(query)
+
+                # Reorder documents by relevance
+                reordering = LongContextReorder()
+                reordered_docs = reordering.transform_documents(docs)
+
+
+                prompt_template = """
+                Given these texts:
+                -----
+                {context}
+                -----
+                Please answer the following question:
+                {query}
+                """
+                prompt = PromptTemplate(template=prompt_template, input_variables=["context", "query"])
+
+                # Create and invoke the chain:
+                chain = create_stuff_documents_chain(llm, prompt)
+                response = chain.invoke({"context": reordered_docs, "query": query})
+                
+                # Display response
+                st.markdown("### Response")
+                st.write(response)
         
-        # Retrieve relevant documents
-        docs = retriever.invoke(query)
+        else:
+    
+            query = f"""What is the Resolution for the exact below mentioned Problem:\n {question}\n\n 
+                        Try to extract the resolution until any of this title arrives "NOTES" , "Short description:"\n
+                        Note: Extract the exact answer from the input context and the answer of the problem will be part of the Resolution that can be found in Article body"""
+            
+            # Retrieve relevant documents
+            docs = retriever.invoke(query)
 
-        # Reorder documents by relevance
-        reordering = LongContextReorder()
-        reordered_docs = reordering.transform_documents(docs)
+            # Reorder documents by relevance
+            reordering = LongContextReorder()
+            reordered_docs = reordering.transform_documents(docs)
 
-        # Prepare LLM model for response generation
-        llm = AzureChatOpenAI(
-            api_version=api_version,
-            azure_endpoint=azure_endpoint,
-            openai_api_key=api_key,
-            model="gpt-4o-mini",
-            base_url=None,
-            azure_deployment="GPT-4o-mini"
-        )
+            # Prepare LLM model for response generation
+            llm = AzureChatOpenAI(
+                api_version=api_version,
+                azure_endpoint=azure_endpoint,
+                openai_api_key=api_key,
+                model="gpt-4o-mini",
+                base_url=None,
+                azure_deployment="GPT-4o-mini"
+            )
 
-        llm.validate_base_url = False
+            llm.validate_base_url = False
 
-        prompt_template = """
-        Given these texts:
-        -----
-        {context}
-        -----
-        Please answer the following question:
-        {query}
-        """
-        prompt = PromptTemplate(template=prompt_template, input_variables=["context", "query"])
+            prompt_template = """
+            Given these texts:
+            -----
+            {context}
+            -----
+            Please answer the following question:
+            {query}
+            """
+            prompt = PromptTemplate(template=prompt_template, input_variables=["context", "query"])
 
-        # Create and invoke the chain:
-        chain = create_stuff_documents_chain(llm, prompt)
-        response = chain.invoke({"context": reordered_docs, "query": query})
-        
-        # Display response
-        st.markdown("### Response")
-        st.write(response)
+            # Create and invoke the chain:
+            chain = create_stuff_documents_chain(llm, prompt)
+            response = chain.invoke({"context": reordered_docs, "query": query})
+            
+            # Display response
+            st.markdown("### Response")
+            st.write(response)
